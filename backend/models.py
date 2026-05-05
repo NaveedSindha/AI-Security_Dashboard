@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, Float
 from backend.database import Base
 
+
 class Log(Base):
     __tablename__ = "logs"
 
@@ -21,3 +22,13 @@ class Log(Base):
     risk_score = Column(Integer)
     ml_anomaly = Column(Boolean)
     reasons = Column(String)
+    api_key_name = Column(String, nullable=True)
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True)
+    name = Column(String)
+    created_at = Column(String)

@@ -1,18 +1,35 @@
-import axios from "axios";
+const BASE = "http://127.0.0.1:8000";
 
-const API_URL = "http://127.0.0.1:8000";
+function getKey() {
+  return localStorage.getItem("sentinel_api_key") || "";
+}
 
-export const getLogs = async () => {
-  const res = await axios.get(`${API_URL}/logs`);
-  return res.data;
-};
+function headers() {
+  return {
+    "Content-Type": "application/json",
+    "x-api-key": getKey(),
+  };
+}
 
-export const getAlerts = async () => {
-  const res = await axios.get(`${API_URL}/alerts`);
-  return res.data;
-};
+export async function validateKey(key) {
+  const res = await fetch(`${BASE}/logs`, {
+    headers: { "x-api-key": key },
+  });
+  return res.ok;
+}
 
-export const clearLogs = async () => {
-  const res = await axios.delete(`${API_URL}/logs`);
-  return res.data;
-};
+export async function getLogs() {
+  const res = await fetch(`${BASE}/logs`, { headers: headers() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getAlerts() {
+  const res = await fetch(`${BASE}/alerts`, { headers: headers() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function clearLogs() {
+  await fetch(`${BASE}/logs`, { method: "DELETE", headers: headers() });
+}

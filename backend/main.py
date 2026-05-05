@@ -1,18 +1,22 @@
-from fastapi import FastAPI, Depends
+import secrets
+import asyncio
+from datetime import datetime
+
+from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
 from backend.detector import detect_anomaly
 from ml.ml_detector import detect_ml_anomaly
 from backend.database import engine, get_db, Base
 from backend import models
 from backend.alerting import send_email_alert
 from backend.geoip import get_geo
-import asyncio
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="AI Security Monitoring Backend")
+app = FastAPI(title="SentinelAI Security Monitoring")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,26 +26,70 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class LogRequest(BaseModel):
     user: str
     ip: str
-    country: str
+    country: str = "Unknown"
     status: str
     endpoint: str
     user_agent: str
     timestamp: str
 
+
 @app.get("/")
 def home():
     return {
-        "message": "AI Security Monitoring Backend Running with ML 🚀",
-        "routes": ["/logs", "/alerts", "/docs"]
+        "message": "SentinelAI Security Monitoring 🚀",
+        "routes": ["/logs", "/alerts", "/api-keys", "/docs"]
     }
 
-@app.post("/logs")
-async def receive_log(log: LogRequest, db: Session = Depends(get_db)):
-    log_dict = log.dict()
 
+# ── API Key routes ──────────────────────────────
+
+@app.post("/api-keys")
+def create_api_key(name: str, db: Session = Depends(get_db)):
+    key = "sk-sentinel-" + secrets.token_urlsafe(24)
+    db_key = models.ApiKey(
+        key=key,
+        name=name,
+        created_at=datetime.utcnow().isoformat()
+    )
+    db.add(db_key)
+    db.commit()
+    return {"api_key": key, "name": name}
+
+
+@app.get("/api-keys")
+def list_api_keys(db: Session = Depends(get_db)):
+    return db.query(models.ApiKey).all()
+
+
+@app.delete("/api-keys/{key}")
+def delete_api_key(key: str, db: Session = Depends(get_db)):
+    db.query(models.ApiKey).filter(models.ApiKey.key == key).delete()
+    db.commit()
+    return {"message": "API key deleted"}
+
+
+# ── Log ingestion ───────────────────────────────
+
+@app.post("/logs")
+async def receive_log(
+    log: LogRequest,
+    db: Session = Depends(get_db),
+    x_api_key: str = Header(None)
+):
+    key_name = "manual"
+    if x_api_key:
+        valid_key = db.query(models.ApiKey).filter(
+            models.ApiKey.key == x_api_key
+        ).first()
+        if not valid_key:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        key_name = valid_key.name
+
+    log_dict = log.dict()
     geo = get_geo(log_dict["ip"])
     log_dict["country"] = geo["country"]
 
@@ -50,9 +98,11 @@ async def receive_log(log: LogRequest, db: Session = Depends(get_db)):
     rule_score = rule_result["risk_score"]
     ml_score = ml_result["ml_score"]
     final_risk_score = min(100, int((rule_score * 0.6) + (ml_score * 0.4)))
+
     reasons = rule_result["reasons"].copy()
     if ml_result["ml_anomaly"]:
         reasons.append(ml_result["ml_reason"])
+
     is_anomaly = final_risk_score >= 50 or ml_result["ml_anomaly"]
 
     db_log = models.Log(
@@ -71,7 +121,8 @@ async def receive_log(log: LogRequest, db: Session = Depends(get_db)):
         ml_score=ml_score,
         risk_score=final_risk_score,
         ml_anomaly=ml_result["ml_anomaly"],
-        reasons=", ".join(reasons)
+        reasons=", ".join(reasons),
+        api_key_name=key_name
     )
     db.add(db_log)
     db.commit()
@@ -95,13 +146,20 @@ async def receive_log(log: LogRequest, db: Session = Depends(get_db)):
         "longitude": geo["longitude"],
     }
 
+
+# ── Query routes ────────────────────────────────
+
 @app.get("/logs")
 def get_logs(db: Session = Depends(get_db)):
     return db.query(models.Log).order_by(models.Log.id.desc()).all()
 
+
 @app.get("/alerts")
 def get_alerts(db: Session = Depends(get_db)):
-    return db.query(models.Log).filter(models.Log.is_anomaly == True).order_by(models.Log.id.desc()).all()
+    return db.query(models.Log).filter(
+        models.Log.is_anomaly == True
+    ).order_by(models.Log.id.desc()).all()
+
 
 @app.delete("/logs")
 def clear_logs(db: Session = Depends(get_db)):
