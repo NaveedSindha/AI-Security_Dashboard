@@ -1,13 +1,21 @@
 # backend/log_generator.py
 
+import os
 import requests
 import random
 import time
 from datetime import datetime
+from dotenv import load_dotenv
 
-URL = "http://127.0.0.1:8000/logs"
+load_dotenv()
 
-API_KEY = "sk-sentinel-htgiHL0gR8FKZ2KF36ImRJxGHT6TW80P"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+URL = f"{BACKEND_URL}/logs"
+
+API_KEY = os.getenv("SENTINEL_API_KEY")
+
+if not API_KEY:
+    raise RuntimeError("SENTINEL_API_KEY is not set")
 
 users = ["admin", "user1", "guest", "naveed"]
 countries = ["Canada", "USA", "Germany", "Russia", "North Korea"]
@@ -20,7 +28,6 @@ user_agents = [
     "python-requests/2.31.0"
 ]
 
-
 def generate_log():
     return {
         "user": random.choice(users),
@@ -32,7 +39,6 @@ def generate_log():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-
 while True:
     log = generate_log()
 
@@ -40,9 +46,7 @@ while True:
         response = requests.post(
             URL,
             json=log,
-            headers={
-                "x-api-key": API_KEY
-            }
+            headers={"x-api-key": API_KEY}
         )
 
         print(log, response.json())

@@ -1,5 +1,6 @@
 import secrets
 import asyncio
+import os
 from datetime import datetime
 
 from fastapi import FastAPI, Depends, Header, HTTPException
@@ -19,6 +20,8 @@ from fastapi import Request
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SentinelAI Security Monitoring")
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
 
 app.add_middleware(
     CORSMiddleware,
@@ -215,5 +218,11 @@ def clear_logs(
 
 @app.get("/my-ip")
 async def get_my_ip(request: Request):
-    ip = request.headers.get("x-forwarded-for", request.client.host)
+    forwarded_for = request.headers.get("x-forwarded-for")
+
+    if forwarded_for:
+        ip = forwarded_for.split(",")[0].strip()
+    else:
+        ip = request.client.host
+
     return {"ip": ip}
