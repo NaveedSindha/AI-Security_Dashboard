@@ -11,7 +11,7 @@ if os.path.exists(MODEL_PATH):
 
 
 def extract_features(log):
-    hour = datetime.fromisoformat(log["timestamp"]).hour
+    hour = datetime.fromisoformat(log["timestamp"].replace("Z", "+00:00")).hour
 
     failed_login = 1 if log["status"] == "failed" else 0
 

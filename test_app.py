@@ -4,7 +4,7 @@ from sentinelai import Sentinel
 app = Flask(__name__)
 
 # Point it at your running backend with your API key
-sentinel = Sentinel(api_key="sk-sentinel-NuI2f0hBghkk60MKw1gQUfQHv5CCcyK8")
+sentinel = Sentinel(api_key="sk-sentinel-CHKTxdy28vdRmTHHnCFSkfRjgUQSAokf")
 sentinel.flask_middleware(app)
 
 @app.route("/")

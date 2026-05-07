@@ -13,6 +13,8 @@ from backend.database import engine, get_db, Base
 from backend import models
 from backend.alerting import send_email_alert
 from backend.geoip import get_geo
+from fastapi.staticfiles import StaticFiles
+from fastapi import Request
 
 Base.metadata.create_all(bind=engine)
 
@@ -25,16 +27,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 
 
 class LogRequest(BaseModel):
-    user: str
-    ip: str
+    user: str = "anonymous"
+    ip: str = "0.0.0.0"
     country: str = "Unknown"
-    status: str
-    endpoint: str
-    user_agent: str
-    timestamp: str
+    status: str = "success"
+    endpoint: str = "/"
+    user_agent: str = "unknown"
+    timestamp: str = ""
+
+
+def get_api_key_owner(
+    x_api_key: str = Header(None),
+    db: Session = Depends(get_db)
+):
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    valid_key = db.query(models.ApiKey).filter(
+        models.ApiKey.key == x_api_key
+    ).first()
+
+    if not valid_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    return valid_key.name
 
 
 @app.get("/")
@@ -45,18 +65,19 @@ def home():
     }
 
 
-# ── API Key routes ──────────────────────────────
-
 @app.post("/api-keys")
 def create_api_key(name: str, db: Session = Depends(get_db)):
     key = "sk-sentinel-" + secrets.token_urlsafe(24)
+
     db_key = models.ApiKey(
         key=key,
         name=name,
         created_at=datetime.utcnow().isoformat()
     )
+
     db.add(db_key)
     db.commit()
+
     return {"api_key": key, "name": name}
 
 
@@ -72,34 +93,44 @@ def delete_api_key(key: str, db: Session = Depends(get_db)):
     return {"message": "API key deleted"}
 
 
-# ── Log ingestion ───────────────────────────────
-
 @app.post("/logs")
 async def receive_log(
     log: LogRequest,
     db: Session = Depends(get_db),
     x_api_key: str = Header(None)
 ):
-    key_name = "manual"
-    if x_api_key:
-        valid_key = db.query(models.ApiKey).filter(
-            models.ApiKey.key == x_api_key
-        ).first()
-        if not valid_key:
-            raise HTTPException(status_code=401, detail="Invalid API key")
-        key_name = valid_key.name
+    
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    valid_key = db.query(models.ApiKey).filter(
+        models.ApiKey.key == x_api_key
+    ).first()
+
+    if not valid_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    key_name = valid_key.name
 
     log_dict = log.dict()
+    
+    if not log_dict["timestamp"]:
+        log_dict["timestamp"] = datetime.utcnow().isoformat()
+
+
     geo = get_geo(log_dict["ip"])
     log_dict["country"] = geo["country"]
 
     rule_result = detect_anomaly(log_dict)
     ml_result = detect_ml_anomaly(log_dict)
+
     rule_score = rule_result["risk_score"]
     ml_score = ml_result["ml_score"]
+
     final_risk_score = min(100, int((rule_score * 0.6) + (ml_score * 0.4)))
 
     reasons = rule_result["reasons"].copy()
+
     if ml_result["ml_anomaly"]:
         reasons.append(ml_result["ml_reason"])
 
@@ -124,6 +155,7 @@ async def receive_log(
         reasons=", ".join(reasons),
         api_key_name=key_name
     )
+
     db.add(db_log)
     db.commit()
     db.refresh(db_log)
@@ -147,22 +179,41 @@ async def receive_log(
     }
 
 
-# ── Query routes ────────────────────────────────
-
 @app.get("/logs")
-def get_logs(db: Session = Depends(get_db)):
-    return db.query(models.Log).order_by(models.Log.id.desc()).all()
+def get_logs(
+    db: Session = Depends(get_db),
+    key_name: str = Depends(get_api_key_owner)
+):
+    return db.query(models.Log).filter(
+        models.Log.api_key_name == key_name
+    ).order_by(models.Log.id.desc()).all()
 
 
 @app.get("/alerts")
-def get_alerts(db: Session = Depends(get_db)):
+def get_alerts(
+    db: Session = Depends(get_db),
+    key_name: str = Depends(get_api_key_owner)
+):
     return db.query(models.Log).filter(
+        models.Log.api_key_name == key_name,
         models.Log.is_anomaly == True
     ).order_by(models.Log.id.desc()).all()
 
 
 @app.delete("/logs")
-def clear_logs(db: Session = Depends(get_db)):
-    db.query(models.Log).delete()
+def clear_logs(
+    db: Session = Depends(get_db),
+    key_name: str = Depends(get_api_key_owner)
+):
+    db.query(models.Log).filter(
+        models.Log.api_key_name == key_name
+    ).delete()
+
     db.commit()
-    return {"message": "all logs and alerts cleared"}
+
+    return {"message": "your logs and alerts cleared"}
+
+@app.get("/my-ip")
+async def get_my_ip(request: Request):
+    ip = request.headers.get("x-forwarded-for", request.client.host)
+    return {"ip": ip}

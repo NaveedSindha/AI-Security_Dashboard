@@ -4,7 +4,10 @@ def detect_anomaly(log):
 
     if log["status"] == "failed":
         risk_score += 25
-        reasons.append("Failed login")
+        if log.get("endpoint", "/") in ["/login", "/signin", "/auth"]:
+            reasons.append("Failed login attempt")
+        else:
+            reasons.append("Failed request")
 
     if log["endpoint"] in ["/admin", "/settings", "/api/keys"]:
         risk_score += 30

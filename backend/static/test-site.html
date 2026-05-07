@@ -1,0 +1,15 @@
+<script src="http://127.0.0.1:8000/static/sentinel.js"
+  data-api-key="sk-sentinel-EQlMOi_icUJH2-kbG0qwLOTySR7j8eeY"></script>
+
+<h1>Test Site</h1>
+
+<form>
+  <input name="username" placeholder="Username" />
+  <input type="password" placeholder="Password" />
+  <button type="submit">Login</button>
+</form>
+
+<p>Invalid username or password</p>
+
+<button onclick="fetch('/fake-api')">Failed Request</button>
+<button onclick="throw new Error('Test crash')">JS Error</button>

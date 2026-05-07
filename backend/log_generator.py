@@ -7,6 +7,8 @@ from datetime import datetime
 
 URL = "http://127.0.0.1:8000/logs"
 
+API_KEY = "sk-sentinel-htgiHL0gR8FKZ2KF36ImRJxGHT6TW80P"
+
 users = ["admin", "user1", "guest", "naveed"]
 countries = ["Canada", "USA", "Germany", "Russia", "North Korea"]
 endpoints = ["/home", "/login", "/admin", "/settings", "/api/keys"]
@@ -33,9 +35,18 @@ def generate_log():
 
 while True:
     log = generate_log()
+
     try:
-        response = requests.post(URL, json=log)
+        response = requests.post(
+            URL,
+            json=log,
+            headers={
+                "x-api-key": API_KEY
+            }
+        )
+
         print(log, response.json())
+
     except Exception as e:
         print("Error:", e)
 
