@@ -2,6 +2,7 @@
   const script = document.currentScript;
   const apiKey = script?.getAttribute("data-api-key");
   const backendUrl = script?.getAttribute("data-host") || new URL(script.src).origin;
+  let currentUser = localStorage.getItem("sentinel_user") || "anonymous";
 
   if (!apiKey) {
     console.warn("[SentinelAI] Missing data-api-key");
@@ -30,7 +31,7 @@
         "x-api-key": apiKey,
       },
       body: JSON.stringify({
-        user: user || "anonymous",
+        user: user || currentUser || "anonymous",
         ip: realIP,
         country: "Unknown",
         status: status,
@@ -43,7 +44,7 @@
 
   // JS errors
   window.addEventListener("error", function () {
-    sendLog("failed", window.location.pathname + " [js-error]", "anonymous");
+    sendLog("failed", window.location.pathname + " [js-error]");
   });
 
   // Promise rejections
@@ -70,10 +71,17 @@
 
   // Manual logging — now includes real IP automatically
   window.SentinelAI = {
+    identify: function (user) {
+      currentUser = user;
+      localStorage.setItem("sentinel_user", user);
+    },
+
     log: function (status, endpoint, user) {
-      sendLog(status, endpoint, user || "anonymous");
+      sendLog(status, endpoint, user || currentUser);
     }
   };
+
+  window.Sentinel = window.SentinelAI;
 
   // Auto-detect login form submissions
   document.addEventListener("submit", function (e) {
