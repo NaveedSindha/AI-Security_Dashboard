@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getLogs, getAlerts, clearLogs, validateKey, createApiKey } from "./api";
+import { getLogs, getAlerts, clearLogs, validateKey, createApiKey, API_URL } from "./api";
 import AttackMap from "./AttackMap";
 import "./App.css";
 
@@ -61,7 +61,7 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
 
   const scriptTag = `<script
-  src="http://127.0.0.1:8000/static/sentinel.js"
+  src="${API_URL}/static/sentinel.js"
   data-api-key="${generatedKey || apiKey || "YOUR_API_KEY_HERE"}"
 ></script>`;
 

@@ -1,18 +1,49 @@
-const BASE = "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-function getKey() {
-  return localStorage.getItem("sentinel_api_key") || "";
+function getApiKey() {
+  return localStorage.getItem("sentinel_api_key");
 }
 
-function headers() {
-  return {
-    "Content-Type": "application/json",
-    "x-api-key": getKey(),
-  };
+export async function getLogs() {
+  const res = await fetch(`${API_URL}/logs`, {
+    headers: {
+      "x-api-key": getApiKey(),
+    },
+  });
+  return res.json();
+}
+
+export async function getAlerts() {
+  const res = await fetch(`${API_URL}/alerts`, {
+    headers: {
+      "x-api-key": getApiKey(),
+    },
+  });
+  return res.json();
+}
+
+export async function clearLogs() {
+  const res = await fetch(`${API_URL}/logs`, {
+    method: "DELETE",
+    headers: {
+      "x-api-key": getApiKey(),
+    },
+  });
+  return res.json();
+}
+
+export async function validateKey(apiKey) {
+  const res = await fetch(`${API_URL}/logs`, {
+    headers: {
+      "x-api-key": apiKey,
+    },
+  });
+
+  return res.ok;
 }
 
 export async function createApiKey(name) {
-  const res = await fetch(`${BASE}/api-keys?name=${encodeURIComponent(name)}`, {
+  const res = await fetch(`${API_URL}/api-keys?name=${encodeURIComponent(name)}`, {
     method: "POST",
   });
 
@@ -23,41 +54,4 @@ export async function createApiKey(name) {
   return res.json();
 }
 
-export async function validateKey(key) {
-  const res = await fetch(`${BASE}/logs`, {
-    headers: {
-      "x-api-key": key,
-    },
-  });
-
-  return res.ok;
-}
-
-export async function getLogs() {
-  const res = await fetch(`${BASE}/logs`, {
-    headers: headers(),
-  });
-
-  if (!res.ok) return [];
-
-  return res.json();
-}
-
-export async function getAlerts() {
-  const res = await fetch(`${BASE}/alerts`, {
-    headers: headers(),
-  });
-
-  if (!res.ok) return [];
-
-  return res.json();
-}
-
-export async function clearLogs() {
-  const res = await fetch(`${BASE}/logs`, {
-    method: "DELETE",
-    headers: headers(),
-  });
-
-  return res.json();
-}
+export { API_URL };
